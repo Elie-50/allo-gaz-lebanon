@@ -1,0 +1,5 @@
+.env
+db.sqlite3
+/*.json
+/media/*
+backups/*.sql
