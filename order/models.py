@@ -34,6 +34,9 @@ class Order(models.Model):
 class ExchangeRate(models.Model):
     rate = models.FloatField(default=89000)
 
+class BackupDate(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+
 class Receipt(models.Model):
     orders = models.ManyToManyField(Order)
     file = models.FileField(upload_to='receipts')

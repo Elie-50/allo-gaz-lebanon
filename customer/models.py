@@ -38,7 +38,7 @@ class Address(models.Model):
     image = models.ImageField(upload_to='addresses', null=True, blank=True)
 
     def __str__(self):
-        return f"Address: {self.region} {self.street} {self.building} {self.floor}"
+        return f"Address {self.id}: {self.region} {self.street} {self.building} {self.floor}"
 
 class PhoneNumber(models.Model):
     address = models.ForeignKey(Address, on_delete=models.CASCADE, related_name='mobile_numbers', db_index=True)

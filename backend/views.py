@@ -5,27 +5,23 @@ import datetime
 import subprocess
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import BasePermission, AllowAny
+from django.utils import timezone
 from django.conf import settings
 from google.cloud import storage
-
-class IsSuperUser(BasePermission):
-    """Allows access only to superusers."""
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_superuser)
-
+from order.models import BackupDate
+from helpers.permissions import IsSuperUser
 
 class BackupDatabaseAPIView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsSuperUser]
 
-    def get(self, request):
+    def post(self, request):
         # --- Database Settings ---
         db_settings = settings.DATABASES['default']
         db_name = db_settings['NAME']
         db_user = db_settings['USER']
         db_password = db_settings['PASSWORD']
         db_host = db_settings.get('HOST', 'localhost')
-        db_port = db_settings.get('PORT', '')
+        db_port = db_settings.get('PORT', '3306')
 
         # --- Backup Setup ---
         backup_dir = os.path.join(settings.BASE_DIR, 'backups')
@@ -75,10 +71,17 @@ class BackupDatabaseAPIView(APIView):
                 if f.endswith('.sql') and path != backup_file:
                     os.remove(path)
 
+            BackupDate.objects.create()
+
+            # Get the current (local) time
+            latest_backup = timezone.localtime(timezone.now())
+            formatted_time = latest_backup.strftime("%d/%m/%Y %I:%M %p")
+
             return Response({
                 'status': 'success',
                 'local_backup': backup_file,
-                'gcs_url': gcs_url
+                'gcs_url': gcs_url,
+                'latest_backup': formatted_time
             })
 
         except subprocess.CalledProcessError as e:
@@ -86,6 +89,22 @@ class BackupDatabaseAPIView(APIView):
         except Exception as ex:
             return Response({'status': 'error', 'message': str(ex)}, status=500)
 
+    def get(self, request):
+        try:
+            latest_backup = BackupDate.objects.latest('created_at')
+            # Explicitly convert the datetime to the active timezone
+            local_time = timezone.localtime(latest_backup.created_at)
+            formatted_time = local_time.strftime("%d/%m/%Y %I:%M %p")
+
+            return Response({
+                "status": "success",
+                "latest_backup": formatted_time
+            })
+        except BackupDate.DoesNotExist:
+            return Response({
+                "status": "error",
+                "message": "No backups have been recorded yet."
+            }, status=404)
 
 class ReactAppView(View):
     def get(self, request, *args, **kwargs):

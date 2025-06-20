@@ -77,11 +77,6 @@ class OrderType(DjangoObjectType):
         model = Order
         fields = "__all__"
 
-class OrderSearchResult(graphene.ObjectType):
-    orders = graphene.List(OrderType)
-    address = graphene.Field(AddressType)
-    total_profit = graphene.Float()
-
 class SourceType(DjangoObjectType):
     class Meta:
         model = Source
@@ -109,6 +104,11 @@ class ItemType(DjangoObjectType):
 
     def resolve_sources(self, info):
         return self.sources.all()
+
+class OrderPaginationResult(graphene.ObjectType):
+    orders = graphene.List(OrderType)
+    address = graphene.Field(AddressType)
+    total_pages = graphene.Int()
 
 
 class Query(graphene.ObjectType):
@@ -143,11 +143,18 @@ class Query(graphene.ObjectType):
         order_by=graphene.String(required=True),
         order_direction=graphene.Int(required=True)
     )
-    orders_search = graphene.Field(
-        OrderSearchResult,
+    total_profit = graphene.Float(
         start_date=graphene.Date(required=True),
-        end_date=graphene.Date(required=False),
-        address_id=graphene.Int(required=False)
+        end_date=graphene.Date(),
+        address_id=graphene.Int()
+    )
+    paginated_orders = graphene.Field(
+        OrderPaginationResult,
+        start_date=graphene.Date(required=True),
+        end_date=graphene.Date(),
+        address_id=graphene.Int(),
+        page=graphene.Int(default_value=1),
+        page_size=graphene.Int(default_value=10)
     )
 
     drivers_search = graphene.List(
@@ -158,57 +165,71 @@ class Query(graphene.ObjectType):
     def resolve_drivers_search(self, info):
         return User.objects.filter(is_driver=True)
 
-    
-    @login_required_resolver
-    def resolve_orders_search(self, info, start_date, end_date=None, address_id=None):
-        # Ensure start_date and end_date are aware datetimes
+    # @login_required_resolver
+    def resolve_total_profit(self, info, start_date, end_date=None, address_id=None):
         start_of_day = make_aware(datetime.datetime.combine(start_date, datetime.time.min))
+        end_of_day = make_aware(datetime.datetime.combine(end_date or start_date, datetime.time.max))
 
-        if end_date:
-            end_of_day = make_aware(datetime.datetime.combine(end_date, datetime.time.max))
-        else:
-            end_of_day = make_aware(datetime.datetime.combine(start_date, datetime.time.max))
-
-        orders = None
-        address = None
-
-        # If address_id is provided, filter orders by the address
         if address_id:
             try:
                 address = Address.objects.get(id=address_id)
                 orders = address.orders.filter(
                     orderedAt__range=(start_of_day, end_of_day),
                     isActive=True,
-                    deliveredAt__isnull=False  # Explicitly filter out orders that are not delivered
+                    deliveredAt__isnull=False
                 )
             except Address.DoesNotExist:
-                return OrderSearchResult(orders=[], address=None, total_profit=0)
+                return 0.0
         else:
-            # If no address_id, query all orders
             orders = Order.objects.filter(
                 orderedAt__range=(start_of_day, end_of_day),
                 isActive=True,
-                deliveredAt__isnull=False  # Filter for only delivered orders
+                deliveredAt__isnull=False
             )
 
-        # Prefetch related items (avoid N+1 queries)
+        total_profit = orders.annotate(
+            profit=(F('item__price') - F('item__buyPrice')) * F('quantity') * (1 - F('discount') / 100)
+        ).aggregate(total_profit=Sum('profit'))['total_profit'] or 0.0
+
+        return round(total_profit, 2)
+
+    # @login_required_resolver
+    def resolve_paginated_orders(self, info, start_date, end_date=None, address_id=None, page=1, page_size=10):
+        start_of_day = make_aware(datetime.datetime.combine(start_date, datetime.time.min))
+        end_of_day = make_aware(datetime.datetime.combine(end_date or start_date, datetime.time.max))
+
+        address = None
+        orders = []
+        if address_id:
+            try:
+                address = Address.objects.get(id=address_id)
+                orders = address.orders.filter(
+                    orderedAt__range=(start_of_day, end_of_day),
+                    isActive=True,
+                )
+            except Address.DoesNotExist:
+                return OrderPaginationResult(orders=[], address=address, total_pages=0)
+        else:
+            orders = Order.objects.filter(
+                orderedAt__range=(start_of_day, end_of_day),
+                isActive=True,
+                deliveredAt__isnull=False
+            )
+
+        # Prefetch related data
         orders = orders.prefetch_related('item')
 
-        # Calculate total profit using `F` expressions and `annotate()`
-        orders = orders.annotate(
-            profit=(
-                (F('item__price') - F('item__buyPrice')) * F('quantity') * (1 - F('discount') / 100)
-            )
-        )
+        # Apply pagination
+        paginator = Paginator(orders, page_size)
+        try:
+            paginated_orders = paginator.page(page)
+        except EmptyPage:
+            return OrderPaginationResult(orders=[], address=address, totalPages=paginator.num_pages)
 
-        # Calculate the total profit by summing the profit field
-        total_profit = orders.aggregate(total_profit=Sum('profit'))['total_profit'] or 0.0
-
-        # Return the result
-        return OrderSearchResult(
-            orders=orders,
+        return OrderPaginationResult(
+            orders=paginated_orders.object_list,
             address=address,
-            total_profit=round(total_profit, 2)
+            total_pages=paginator.num_pages,
         )
 
     @login_required_resolver
@@ -237,7 +258,7 @@ class Query(graphene.ObjectType):
         except User.DoesNotExist:
             return None
         
-    # @login_required_resolver
+    @login_required_resolver
     def resolve_item_by_id(self, info, id):
         try:
             return Item.objects.get(id=id)

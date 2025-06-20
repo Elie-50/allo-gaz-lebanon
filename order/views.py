@@ -1,5 +1,7 @@
 import io
 import os
+
+from helpers.permissions import IsSuperUser
 from .models import Order, ExchangeRate, Receipt
 from item.models import Item
 from user.models import User
@@ -7,21 +9,24 @@ from .serializers import OrderSerializer, ExchangeRateSerializer
 from rest_framework.permissions import IsAdminUser
 from helpers.views import BaseView
 from customer.models import Address
-from django.utils.timezone import now
 from django.utils.dateparse import parse_date
+from django.utils.timezone import now
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.core.files.base import ContentFile
 from rest_framework.permissions import AllowAny
-from datetime import datetime
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase import pdfmetrics
+from django.db.models import F, Sum, ExpressionWrapper, FloatField
 import arabic_reshaper
 from bidi.algorithm import get_display
+from datetime import datetime, timedelta, timezone as dt_timezone
+
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -51,10 +56,9 @@ class OrderDetailView(BaseView):
         
         
 class ExchangeRateView(APIView):
-
     def get_exchange_instance(self):
         # Always return the singleton instance, or create if not exists
-        exchange, created = ExchangeRate.objects.get_or_create()
+        exchange, _ = ExchangeRate.objects.get_or_create()
         return exchange
 
     def get(self, request):
@@ -70,6 +74,7 @@ class ExchangeRateView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class MarkOrdersDeliveredAPIView(APIView):
     def post(self, request, *args, **kwargs):
         date_str = request.data.get('date')
@@ -80,54 +85,67 @@ class MarkOrdersDeliveredAPIView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            date = parse_date(date_str)
-            if date is None:
-                raise ValueError("Invalid date format. Use YYYY-MM-DD.")
+            local_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            
+            # Create timezone-aware range
+            local_start = timezone.make_aware(datetime.combine(local_date, datetime.min.time()))
+            local_end = local_start + timedelta(days=1)
+
+            utc_start = local_start.astimezone(dt_timezone.utc)
+            utc_end = local_end.astimezone(dt_timezone.utc)
 
             updated_count = (
-                Order.objects
-                .filter(orderedAt__date=date, address_id=address_id, status='P')
-                .update(status='D', deliveredAt=now())
+                Order.objects.filter(
+                    orderedAt__gte=utc_start,
+                    orderedAt__lt=utc_end,
+                    address_id=address_id,
+                    status='P'
+                )
+                .update(status='D', deliveredAt=timezone.now())
             )
+
+            print(Order.objects.filter(address_id=address_id).count())
 
             return Response(
                 {'message': f'{updated_count} order(s) marked as delivered.'},
                 status=status.HTTP_200_OK
             )
 
-        except ValueError as ve:
-            return Response({'error': str(ve)}, status=status.HTTP_400_BAD_REQUEST)
+        except ValueError:
+            return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'},
+                            status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({'error': f'Server error: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 class GenerateReceiptAPIView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
+    
     def get(self, request, address_id, driver_id, date_str):
-        """
-        Generate and store a receipt PDF for a given address and date.
-        This receipt will be designed for thermal printer compatibility.
-        """
-        # Convert date_str to a datetime object
         try:
-            date = datetime.strptime(date_str, '%Y-%m-%d')
+            local_date = datetime.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Fetch orders for the given address and date
-        orders = Order.objects.filter(address_id=address_id, orderedAt__date=date, isActive=True)
+        local_start = timezone.make_aware(datetime.combine(local_date, datetime.min.time()))
+        local_end = local_start + timedelta(days=1)
+
+        utc_start = local_start.astimezone(dt_timezone.utc)
+        utc_end = local_end.astimezone(dt_timezone.utc)
+
+        orders = Order.objects.filter(
+            address_id=address_id,
+            orderedAt__gte=utc_start,
+            orderedAt__lt=utc_end,
+            isActive=True
+        )
 
         if not orders.exists():
             return Response({"error": "No orders found for the given address and date."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Create the Receipt and generate the thermal-friendly PDF
         receipt = Receipt.objects.create()
-
-        # Generate PDF for thermal printer
-        pdf_file = self.create_thermal_pdf(request, orders, address_id, driver_id, date)
-
-        # Save the PDF file to the model's file field
-        receipt.file.save(f"receipt_{address_id}_{date.strftime('%Y%m%d')}.pdf", ContentFile(pdf_file), save=False)
+        pdf_file = self.create_thermal_pdf(request, orders, address_id, driver_id, local_date)
+        filename = f"receipt_{address_id}_{local_date.strftime('%Y%m%d')}.pdf"
+        receipt.file.save(filename, ContentFile(pdf_file), save=False)
         receipt.save()
 
         return Response({
@@ -217,3 +235,43 @@ class GenerateReceiptAPIView(APIView):
         buffer.close()
 
         return pdf_data
+
+
+class ItemSalesSummaryView(APIView):
+    permission_classes = [AllowAny]
+    def get(self, request, *args, **kwargs):
+        # Get the year parameter
+        year = request.query_params.get('year')
+        if not year:
+            return Response(
+                {"error": "Year query parameter is required (e.g. ?year=2024)"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate the year as a number
+        try:
+            year = int(year)
+        except ValueError:
+            return Response(
+                {"error": "Year must be a valid number"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Compute the summary
+        summary = (
+            Order.objects
+            .filter(orderedAt__year=year)
+            .values(item_name=F('item__name'))
+            .annotate(
+                total_quantity=Sum('quantity'),
+                total_sales=Sum(
+                    ExpressionWrapper(
+                        F('quantity') * F('item__price'),
+                        output_field=FloatField()
+                    )
+                ),
+            )
+            .order_by('item_name')
+        )
+
+        return Response(summary, status=status.HTTP_200_OK)

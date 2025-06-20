@@ -191,11 +191,16 @@ if USE_GCS:
     STATIC_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/static/"
     MEDIA_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/media/"
 else:
-    STATIC_URL = "/static/"
-    STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+    STATIC_URL = '/static/'
+    STATIC_ROOT = BASE_DIR / 'static'
 
     MEDIA_URL = "/media/"
     MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+    
+STATICFILES_DIRS = [
+    BASE_DIR / "backend" / "static",
+]
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -210,3 +215,5 @@ GRAPHENE = {
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+TIME_ZONE = 'Asia/Beirut'
+USE_TZ = True

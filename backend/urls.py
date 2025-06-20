@@ -39,7 +39,7 @@ urlpatterns = [
 
 # Serve static and media in development
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-urlpatterns += static(settings.STATIC_URL, document_root=os.path.join(settings.BASE_DIR, "staticfiles"))
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
 # Catch-all React route goes LAST
 urlpatterns += [re_path(r"^(?!static/|media/|favicon\.ico$|robots\.txt$).*", ReactAppView.as_view(), name="react_app")]

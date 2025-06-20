@@ -12,6 +12,7 @@ class Item(models.Model):
     note = models.CharField(max_length=255, null=False, blank=True, default='')
     isActive = models.BooleanField(default=True, db_index=True)
     buyPrice = models.FloatField(blank=False, null=False, validators=[MinValueValidator(0.01)], db_index=True)
+    tva = models.BooleanField(default=False, db_index=True)
 
     class Meta:
         indexes = [
