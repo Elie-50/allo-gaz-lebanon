@@ -9,12 +9,12 @@ from order.models import Order
 from item.models import Item, Source
 from customer.models import Customer, Address, PhoneNumber
 from helpers.util import login_required_resolver
-from django.db import connection
+from urllib.parse import urlparse, urlunparse
 
 class UserType(DjangoObjectType):
     class Meta:
         model = User
-        fields = ('id', 'username', 'first_name', 'middle_name', 'email', 'last_name', 'phone_number', 'is_staff', 'is_active', 'is_superuser')
+        fields = ('id', 'username', 'first_name', 'middle_name', 'email', 'last_name', 'phone_number', 'is_driver', 'is_staff', 'is_active', 'is_superuser')
 
     orders = graphene.List(lambda: OrderType)
 
@@ -59,7 +59,14 @@ class AddressType(DjangoObjectType):
     def resolve_image_url(self, info):
         request = info.context
         if self.image:
-            return request.build_absolute_uri(self.image.url)
+            # Build the absolute URL
+            absolute_url = request.build_absolute_uri(self.image.url)
+
+            # Parse and remove query and fragment
+            parsed = urlparse(absolute_url)
+            clean_url = urlunparse(parsed._replace(query="", fragment=""))
+
+            return clean_url
         return None
     
     orders = graphene.List(lambda: OrderType)
@@ -92,7 +99,14 @@ class ItemType(DjangoObjectType):
     def resolve_image_url(self, info):
         request = info.context
         if self.image:
-            return request.build_absolute_uri(self.image.url)
+            # Build the absolute URL
+            absolute_url = request.build_absolute_uri(self.image.url)
+
+            # Parse and remove query and fragment
+            parsed = urlparse(absolute_url)
+            clean_url = urlunparse(parsed._replace(query="", fragment=""))
+
+            return clean_url
         return None
 
     orders = graphene.List(lambda: OrderType)
@@ -165,7 +179,7 @@ class Query(graphene.ObjectType):
     def resolve_drivers_search(self, info):
         return User.objects.filter(is_driver=True)
 
-    # @login_required_resolver
+    @login_required_resolver
     def resolve_total_profit(self, info, start_date, end_date=None, address_id=None):
         start_of_day = make_aware(datetime.datetime.combine(start_date, datetime.time.min))
         end_of_day = make_aware(datetime.datetime.combine(end_date or start_date, datetime.time.max))

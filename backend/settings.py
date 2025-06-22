@@ -161,13 +161,13 @@ USE_TZ = True
 USE_GCS = os.getenv("USE_GCS", "false").lower() == "true"
 
 if USE_GCS:
-    GS_CREDENTIALS_PATH = os.path.join(BASE_DIR, 'bionic-genre-463212-d3-ef66c0236d92.json')
+    GS_CREDENTIALS_PATH = os.path.join(BASE_DIR, os.getenv("KEY_FILE"))
 
     GS_CREDENTIALS = service_account.Credentials.from_service_account_file(
         GS_CREDENTIALS_PATH
     )
 
-    GS_BUCKET_NAME = 'allo-gaz-media-bucket'
+    GS_BUCKET_NAME = os.getenv("BUCKET_NAME")
 
     STORAGES = {
         "default": {

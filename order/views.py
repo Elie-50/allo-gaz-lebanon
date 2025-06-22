@@ -9,10 +9,12 @@ from .serializers import OrderSerializer, ExchangeRateSerializer
 from rest_framework.permissions import IsAdminUser
 from helpers.views import BaseView
 from customer.models import Address
+from urllib.parse import urlparse, urlunparse
 from django.utils.dateparse import parse_date
 from django.utils.timezone import now
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from django.http import FileResponse
 from rest_framework import status
 from django.core.files.base import ContentFile
 from rest_framework.permissions import AllowAny
@@ -53,9 +55,9 @@ class OrderDetailView(BaseView):
         order.save()
 
         return Response(status=status.HTTP_204_NO_CONTENT)
-        
-        
+              
 class ExchangeRateView(APIView):
+    permission_classes = [IsAdminUser]
     def get_exchange_instance(self):
         # Always return the singleton instance, or create if not exists
         exchange, _ = ExchangeRate.objects.get_or_create()
@@ -74,8 +76,8 @@ class ExchangeRateView(APIView):
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
 class MarkOrdersDeliveredAPIView(APIView):
+    permission_classes = [IsAdminUser]
     def post(self, request, *args, **kwargs):
         date_str = request.data.get('date')
         address_id = request.data.get('address_id')
@@ -148,10 +150,17 @@ class GenerateReceiptAPIView(APIView):
         receipt.file.save(filename, ContentFile(pdf_file), save=False)
         receipt.save()
 
+        # Build the absolute URL
+        absolute_url = request.build_absolute_uri(receipt.file.url)
+
+        # Parse and remove query and fragment
+        parsed = urlparse(absolute_url)
+        clean_url = urlunparse(parsed._replace(query="", fragment=""))
+
         return Response({
             "message": "Receipt generated successfully.",
             "receipt_id": receipt.id,
-            "file_url": request.build_absolute_uri(receipt.file.url)
+            "file_url": clean_url
         }, status=status.HTTP_201_CREATED)
 
     def prepare_arabic(self, text):
@@ -238,10 +247,12 @@ class GenerateReceiptAPIView(APIView):
 
 
 class ItemSalesSummaryView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsSuperUser]
+
     def get(self, request, *args, **kwargs):
         # Get the year parameter
         year = request.query_params.get('year')
+        tva = request.query_params.get('tva')
         if not year:
             return Response(
                 {"error": "Year query parameter is required (e.g. ?year=2024)"},
@@ -258,9 +269,13 @@ class ItemSalesSummaryView(APIView):
             )
 
         # Compute the summary
+        orders = Order.objects.filter(orderedAt__year=year)
+        if tva is not None:
+            tva_flag = tva == "true"  # or bool conversion if needed
+            orders = orders.filter(item__tva=tva_flag)
+
         summary = (
-            Order.objects
-            .filter(orderedAt__year=year)
+            orders
             .values(item_name=F('item__name'))
             .annotate(
                 total_quantity=Sum('quantity'),
@@ -269,9 +284,102 @@ class ItemSalesSummaryView(APIView):
                         F('quantity') * F('item__price'),
                         output_field=FloatField()
                     )
-                ),
+                )
             )
             .order_by('item_name')
         )
 
         return Response(summary, status=status.HTTP_200_OK)
+
+class ExportItemSalesSummaryPDFView(APIView):
+    permission_classes = [IsSuperUser]
+
+    def get(self, request, *args, **kwargs):
+        # Get the year and TVA status
+        year = request.query_params.get('year')
+        tva = request.query_params.get('tva')
+        if not year:
+            return Response({"error": "Year query parameter is required (e.g. ?year=2024)"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            year = int(year)
+        except ValueError:
+            return Response({"error": "Year must be a valid number"}, status=status.HTTP_400_BAD_REQUEST)
+
+        orders = Order.objects.filter(orderedAt__year=year)
+        if tva is not None:
+            tva_flag = tva == "true"
+            orders = orders.filter(item__tva=tva_flag)
+
+        summary = (
+            orders
+            .values(item_name=F('item__name'))
+            .annotate(
+                total_quantity=Sum('quantity'),
+                total_sales=Sum(ExpressionWrapper(F('quantity') * F('item__price'), output_field=FloatField()))
+            )
+            .order_by('item_name')
+        )
+
+        if not summary:
+            return Response({"error": "No data found for the given year and TVA status."}, status=status.HTTP_404_NOT_FOUND)
+
+        # Create the PDF
+        pdf_file = self.create_summary_pdf(year, summary)
+        filename = f"item_sales_summary_{year}.pdf"
+
+        # Return the PDF as a downloadable response
+        response = FileResponse(io.BytesIO(pdf_file), as_attachment=True, filename=filename, content_type='application/pdf')
+        return response
+
+    def create_summary_pdf(self, year, summary):
+        font_path = os.path.join(BASE_DIR, 'amiri', 'Amiri-Regular.ttf')
+        pdfmetrics.registerFont(TTFont('Arabic', font_path))
+
+        buffer = io.BytesIO()
+        c = canvas.Canvas(buffer, pagesize=(595, 842))
+        y_position = 800
+        x_position = 40
+
+        def prepare_arabic(text):
+            """Helper to reshape and display Arabic text correctly."""
+            reshaped = arabic_reshaper.reshape(str(text))
+            return get_display(reshaped)
+
+        # Header
+        c.setFont("Arabic", 14)
+        c.drawRightString(555, y_position, prepare_arabic(f"ملخص مبيعات الأصناف - {year}"))
+        y_position -= 30
+
+        # Table Header
+        c.setFont("Arabic", 12)
+        c.drawRightString(555, y_position, prepare_arabic("اسم المنتج"))
+        c.drawRightString(300, y_position, prepare_arabic("الكمية الإجمالية"))
+        c.drawRightString(180, y_position, prepare_arabic("إجمالي المبيعات"))
+        y_position -= 20
+        c.line(x_position, y_position, 555, y_position)
+        y_position -= 20
+        # Table Rows
+        c.setFont("Arabic", 10)
+        for item in summary:
+            if y_position < 50:
+                c.showPage()
+                y_position = 800
+                c.setFont("Arabic", 12)
+                c.drawRightString(555, y_position, prepare_arabic("اسم المنتج"))
+                c.drawRightString(300, y_position, prepare_arabic("الكمية الإجمالية"))
+                c.drawRightString(180, y_position, prepare_arabic("إجمالي المبيعات"))
+                y_position -= 20
+                c.line(x_position, y_position, 555, y_position)
+                y_position -= 20
+                c.setFont("Arabic", 10)
+
+            c.drawRightString(555, y_position, prepare_arabic(item['item_name']))
+            c.drawRightString(300, y_position, str(item['total_quantity']))
+            c.drawRightString(180, y_position, f"${item['total_sales']:.2f}")
+
+            y_position -= 15
+
+        c.save()
+        buffer.seek(0)
+        return buffer.read()
