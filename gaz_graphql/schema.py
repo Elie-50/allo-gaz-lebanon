@@ -207,7 +207,7 @@ class Query(graphene.ObjectType):
 
         return round(total_profit, 2)
 
-    # @login_required_resolver
+    @login_required_resolver
     def resolve_paginated_orders(self, info, start_date, end_date=None, address_id=None, page=1, page_size=10):
         start_of_day = make_aware(datetime.datetime.combine(start_date, datetime.time.min))
         end_of_day = make_aware(datetime.datetime.combine(end_date or start_date, datetime.time.max))
