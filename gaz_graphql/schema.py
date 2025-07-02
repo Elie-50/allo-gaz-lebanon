@@ -142,7 +142,8 @@ class Query(graphene.ObjectType):
         mobile=graphene.String(required=True),
         email=graphene.String(required=True),
         order_by=graphene.String(required=True),
-        order_direction=graphene.Int(required=True)
+        order_direction=graphene.Int(required=True),
+        is_active=graphene.Boolean(required=True)
     )
     employees_search = graphene.Field(
         EmployeeSearchResult,
@@ -155,7 +156,8 @@ class Query(graphene.ObjectType):
         mobile=graphene.String(required=True),
         email=graphene.String(required=True),
         order_by=graphene.String(required=True),
-        order_direction=graphene.Int(required=True)
+        order_direction=graphene.Int(required=True),
+        is_active=graphene.Boolean(required=True)
     )
     total_profit = graphene.Float(
         start_date=graphene.Date(required=True),
@@ -287,13 +289,14 @@ class Query(graphene.ObjectType):
             return None
     
     @login_required_resolver
-    def resolve_employees_search(self, info, username, firstname, email, mobile, lastname, middlename, page, number_of_results, order_by, order_direction):
+    def resolve_employees_search(self, info, username, firstname, email, mobile, lastname, middlename, page, number_of_results, order_by, order_direction, is_active):
         user = info.context.user
         # Initial name-based filter
         queryset = User.objects.filter(
             first_name__icontains=firstname,
             middle_name__icontains=middlename,
-            last_name__icontains=lastname
+            last_name__icontains=lastname,
+            is_active=is_active
         ).exclude(id=user.id)
 
         if username:
@@ -331,12 +334,13 @@ class Query(graphene.ObjectType):
         )
 
     @login_required_resolver
-    def resolve_customers_search(self, info, firstname, email, mobile, lastname, middlename, page, number_of_results, order_by, order_direction):
+    def resolve_customers_search(self, info, firstname, email, mobile, lastname, middlename, page, number_of_results, order_by, order_direction, is_active):
         # Initial name-based filter
         queryset = Customer.objects.filter(
             firstName__icontains=firstname,
             middleName__icontains=middlename,
-            lastName__icontains=lastname
+            lastName__icontains=lastname,
+            isActive=is_active
         )
 
         queryset = queryset.prefetch_related(
