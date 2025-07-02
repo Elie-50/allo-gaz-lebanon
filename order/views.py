@@ -7,6 +7,7 @@ from item.models import Item
 from user.models import User
 from .serializers import OrderSerializer, ExchangeRateSerializer
 from rest_framework.permissions import IsAdminUser
+from django.db.models.functions import Round
 from helpers.views import BaseView
 from customer.models import Address
 from urllib.parse import urlparse, urlunparse
@@ -279,11 +280,14 @@ class ItemSalesSummaryView(APIView):
             .values(item_name=F('item__name'))
             .annotate(
                 total_quantity=Sum('quantity'),
-                total_sales=Sum(
-                    ExpressionWrapper(
-                        F('quantity') * F('item__price'),
-                        output_field=FloatField()
-                    )
+                total_sales=Round(
+                    Sum(
+                        ExpressionWrapper(
+                            F('quantity') * F('item__price'),
+                            output_field=FloatField()
+                        )
+                    ),
+                    precision=2  # round to 2 decimal places
                 )
             )
             .order_by('item_name')
@@ -292,7 +296,7 @@ class ItemSalesSummaryView(APIView):
         return Response(summary, status=status.HTTP_200_OK)
 
 class ExportItemSalesSummaryPDFView(APIView):
-    permission_classes = [IsSuperUser]
+    permission_classes = [AllowAny]
 
     def get(self, request, *args, **kwargs):
         # Get the year and TVA status
@@ -316,7 +320,15 @@ class ExportItemSalesSummaryPDFView(APIView):
             .values(item_name=F('item__name'))
             .annotate(
                 total_quantity=Sum('quantity'),
-                total_sales=Sum(ExpressionWrapper(F('quantity') * F('item__price'), output_field=FloatField()))
+                total_sales=Round(
+                    Sum(
+                        ExpressionWrapper(
+                            F('quantity') * F('item__price'),
+                            output_field=FloatField()
+                        )
+                    ),
+                    precision=2  # round to 2 decimal places
+                )
             )
             .order_by('item_name')
         )

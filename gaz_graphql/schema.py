@@ -20,35 +20,6 @@ class UserType(DjangoObjectType):
 
     def resolve_orders(self, info):
         return self.orders_made.all()
-
-class CustomerType(DjangoObjectType):
-    class Meta:
-        model = Customer
-        fields = '__all__'
-
-    addresses = graphene.List(lambda: AddressType)
-
-    def resolve_addresses(self, info):
-        return self.addresses.all()
-
-    orders = graphene.List(lambda: OrderType)
-
-    def resolve_orders(self, info):
-        return self.orders.all()
-
-class CustomerSearchResult(graphene.ObjectType):
-    customers = graphene.List(CustomerType)
-    totalPages = graphene.Int()
-
-class EmployeeSearchResult(graphene.ObjectType):
-    employees = graphene.List(UserType)
-    totalPages = graphene.Int()
-
-class PhoneNumberType(DjangoObjectType):
-    class Meta:
-        model = PhoneNumber
-        fields = '__all__'
-
 class AddressType(DjangoObjectType):
     class Meta:
         model = Address
@@ -78,6 +49,36 @@ class AddressType(DjangoObjectType):
 
     def resolve_mobile_numbers(self, info):
         return self.mobile_numbers.all()
+
+
+class CustomerType(DjangoObjectType):
+    class Meta:
+        model = Customer
+        fields = '__all__'
+
+    addresses = graphene.List(lambda: AddressType)
+
+    def resolve_addresses(self, info):
+        return self.addresses.filter(isActive=True)
+
+    orders = graphene.List(lambda: OrderType)
+
+    def resolve_orders(self, info):
+        return self.orders.all()
+
+class CustomerSearchResult(graphene.ObjectType):
+    customers = graphene.List(CustomerType)
+    totalPages = graphene.Int()
+
+class EmployeeSearchResult(graphene.ObjectType):
+    employees = graphene.List(UserType)
+    totalPages = graphene.Int()
+
+class PhoneNumberType(DjangoObjectType):
+    class Meta:
+        model = PhoneNumber
+        fields = '__all__'
+
 
 class OrderType(DjangoObjectType):
     class Meta:

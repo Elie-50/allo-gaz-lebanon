@@ -36,6 +36,7 @@ class Address(models.Model):
     building = models.CharField(max_length=100, null=False, default="")
     floor = models.CharField(max_length=50, null=False, default="")
     image = models.ImageField(upload_to='addresses', null=True, blank=True)
+    isActive = models.BooleanField(default=True)
 
     def __str__(self):
         return f"Address {self.id}: {self.region} {self.street} {self.building} {self.floor}"
