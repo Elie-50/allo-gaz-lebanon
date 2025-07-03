@@ -160,6 +160,9 @@ USE_TZ = True
 
 USE_GCS = os.getenv("USE_GCS", "false").lower() == "true"
 
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'static'
+
 if USE_GCS:
     GS_CREDENTIALS_PATH = os.path.join(BASE_DIR, os.getenv("KEY_FILE"))
 
@@ -179,25 +182,29 @@ if USE_GCS:
             },
         },
         "staticfiles": {
-            "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
             "OPTIONS": {
-                "bucket_name": GS_BUCKET_NAME,
-                "credentials": GS_CREDENTIALS,
-                "location": "static",
+                "location": STATIC_ROOT
             },
         },
+        # "staticfiles": {
+        #     "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",
+        #     "OPTIONS": {
+        #         "bucket_name": GS_BUCKET_NAME,
+        #         "credentials": GS_CREDENTIALS,
+        #         "location": "static",
+        #     },
+        # },
     }
 
-    STATIC_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/static/"
+    # STATIC_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/static/"
+    STATIC_URL = '/static/'
     MEDIA_URL = f"https://storage.googleapis.com/{GS_BUCKET_NAME}/media/"
 else:
-    STATIC_URL = '/static/'
-    STATIC_ROOT = BASE_DIR / 'static'
-
+    
     MEDIA_URL = "/media/"
     MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-    
 STATICFILES_DIRS = [
     BASE_DIR / "backend" / "static",
 ]
