@@ -125,6 +125,9 @@ class OrderPaginationResult(graphene.ObjectType):
     address = graphene.Field(AddressType)
     total_pages = graphene.Int()
 
+class ItemSearchResult(graphene.ObjectType):
+    items = graphene.List(ItemType)
+    totalPages = graphene.Int()
 
 class Query(graphene.ObjectType):
     customer_by_id = graphene.Field(CustomerType, id=graphene.Int(required=True))
@@ -132,7 +135,11 @@ class Query(graphene.ObjectType):
     item_by_id = graphene.Field(ItemType, id=graphene.Int(required=True))
     user_by_id = graphene.Field(UserType, id=graphene.Int(required=True))
     address_by_id = graphene.Field(AddressType, id=graphene.Int(required=True))
-    all_items = graphene.List(ItemType)
+    all_items = graphene.Field(
+        ItemSearchResult,
+        page=graphene.Int(required=True),
+        number_of_results=graphene.Int(required=True)
+    )
     customers_search = graphene.Field(
         CustomerSearchResult,
         firstname=graphene.String(required=True),
@@ -249,9 +256,24 @@ class Query(graphene.ObjectType):
             total_pages=paginator.num_pages,
         )
 
-    @login_required_resolver
-    def resolve_all_items(self, info):
-        return Item.objects.all()
+    # @login_required_resolver
+    def resolve_all_items(self, info, page, number_of_results):
+        queryset = Item.objects.all()
+        paginator = Paginator(queryset, number_of_results)
+
+        # Check if page exists, if not return an empty result
+        try:
+            paginated_items = paginator.page(page)
+        except EmptyPage:
+            return ItemSearchResult(
+                items=[],
+                totalPages=0
+            )
+
+        return ItemSearchResult(
+            items=paginated_items.object_list,
+            totalPages=paginator.num_pages
+        )
     
     @login_required_resolver
     def resolve_customer_by_id(self, info, id):
