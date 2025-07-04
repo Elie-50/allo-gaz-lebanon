@@ -28,13 +28,14 @@ class Customer(models.Model):
 
 class Address(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='addresses', db_index=True)
-    email = models.CharField(max_length=70, db_index=True)
-    landline = models.CharField(max_length=40, null=False, blank=True, default='', db_index=True)
-    link = models.CharField(max_length=50 ,null=False, blank=False)
+    email = models.CharField(max_length=70, db_index=True, null=True, blank=True, default='')
+    landline = models.CharField(max_length=40, null=True, blank=True, default='', db_index=True)
+    notes = models.TextField(null=True, default="")
+    link = models.CharField(max_length=50, null=True, blank=True, default='')
     region = models.CharField(max_length=100, null=False, default="")
-    street = models.CharField(max_length=100, null=False, default="")
-    building = models.CharField(max_length=100, null=False, default="")
-    floor = models.CharField(max_length=50, null=False, default="")
+    street = models.CharField(max_length=100, null=True, blank=True, default='')
+    building = models.CharField(max_length=100, null=True, blank=True, default='')
+    floor = models.CharField(max_length=50, null=True, blank=True, default='')
     image = models.ImageField(upload_to='addresses', null=True, blank=True)
     isActive = models.BooleanField(default=True)
 

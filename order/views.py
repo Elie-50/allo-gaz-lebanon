@@ -202,7 +202,7 @@ class GenerateReceiptAPIView(APIView):
         y_position -= 10
 
         c.setFont("Arabic", 8)
-        c.drawString(10, y_position, self.prepare_arabic(f"For {address.customer.firstName} {address.customer.lastName}"))
+        c.drawString(10, y_position, self.prepare_arabic(f"For {address.customer.firstName} {address.customer.middleName} {address.customer.lastName}"))
         y_position -= 10
 
         c.setFont("Arabic", 8)
@@ -236,7 +236,7 @@ class GenerateReceiptAPIView(APIView):
         c.setFont("Arabic", 8)
         c.drawString(10, y_position, self.prepare_arabic(f"Total Amount: ${total_amount:.2f}"))
         y_position -= 10
-        c.drawString(10, y_position, self.prepare_arabic(f"Total Amount: {(total_amount * e):.2f}L.L"))
+        c.drawString(10, y_position, self.prepare_arabic(f"Total Amount: {(total_amount * e):,.2f} L.L"))
 
         c.save()
 

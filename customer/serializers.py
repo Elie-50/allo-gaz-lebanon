@@ -8,22 +8,6 @@ class AddressSerializer(serializers.ModelSerializer):
         model = Address
         fields = '__all__'
 
-    def validate(self, attrs):
-        request = self.context.get('request')
-        instance = getattr(self, 'instance', None)
-        
-        # On create, require image
-        if request and request.method == 'POST':
-            if 'image' not in attrs:
-                raise serializers.ValidationError({"image": "This field is required."})
-
-        # On update, require image if it doesn't already exist
-        if request and request.method in ['PUT', 'PATCH']:
-            if instance and not instance.image and 'image' not in attrs:
-                raise serializers.ValidationError({"image": "This field is required."})
-        
-        return attrs
-
 
 class CustomerSerializer(serializers.ModelSerializer):
 

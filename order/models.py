@@ -15,6 +15,7 @@ class Order(models.Model):
 
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='orders')
     user = models.ForeignKey(User, on_delete=models.PROTECT, related_name='orders_made')
+    driver = models.ForeignKey(User, on_delete=models.PROTECT, related_name='orders_delivered')
     item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name='orders')
     quantity = models.PositiveIntegerField()
     discount = models.FloatField(default=0)
