@@ -138,7 +138,8 @@ class Query(graphene.ObjectType):
     all_items = graphene.Field(
         ItemSearchResult,
         page=graphene.Int(required=True),
-        number_of_results=graphene.Int(required=True)
+        number_of_results=graphene.Int(required=True),
+        low=graphene.Boolean(required=True)
     )
     customers_search = graphene.Field(
         CustomerSearchResult,
@@ -257,8 +258,11 @@ class Query(graphene.ObjectType):
         )
 
     # @login_required_resolver
-    def resolve_all_items(self, info, page, number_of_results):
-        queryset = Item.objects.all()
+    def resolve_all_items(self, info, page, number_of_results, low):
+        if low:
+            queryset = Item.objects.filter(stockQuantity__lte=F('limit'))
+        else:
+            queryset = Item.objects.all()
         paginator = Paginator(queryset, number_of_results)
 
         # Check if page exists, if not return an empty result
