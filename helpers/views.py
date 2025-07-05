@@ -48,7 +48,6 @@ class BaseView(APIView):
 
     def put(self, request, pk):
         self.check_user_is_active(request.user)
-
         obj = self.get_object(pk)
         serializer = self.Serializer(obj, data=request.data, context={'request': request})
         if serializer.is_valid():

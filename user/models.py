@@ -9,7 +9,7 @@ phone_number_validator = RegexValidator(
 
 # Create your models here.
 class User(AbstractUser):
-    middle_name = models.CharField(max_length=50, blank=True, null=False, default="")
+    middle_name = models.CharField(max_length=50, blank=True, null=True, default="")
     phone_number = models.CharField(
         max_length=20, 
         blank=True, 

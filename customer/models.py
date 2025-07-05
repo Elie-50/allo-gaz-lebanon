@@ -23,8 +23,6 @@ class Customer(models.Model):
     def __str__(self):
         return f"{self.firstName} {self.middleName} {self.lastName}"
 
-    class Meta:
-        unique_together = ('firstName', 'middleName', 'lastName')
 
 class Address(models.Model):
     customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='addresses', db_index=True)

@@ -4,7 +4,7 @@ from django.core.validators import MinValueValidator
 # Create your models here.
 class Item(models.Model):
     name = models.CharField(max_length=255, null=False, blank=False, db_index=True)
-    stockQuantity = models.PositiveIntegerField(blank=False, null=False, default=0)
+    stockQuantity = models.IntegerField(blank=False, null=False, default=0)
     price = models.FloatField(blank=False, null=False, validators=[MinValueValidator(0.01)], db_index=True)
     type = models.CharField(max_length=50, blank=True, null=False, default="", db_index=True)
     limit = models.IntegerField(default=10)

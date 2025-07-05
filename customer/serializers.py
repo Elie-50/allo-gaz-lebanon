@@ -1,5 +1,6 @@
 from .models import *
 from rest_framework import serializers
+from django.db import IntegrityError
 
 class AddressSerializer(serializers.ModelSerializer):
     customer = serializers.PrimaryKeyRelatedField(queryset=Customer.objects.all(), write_only=True, required=False)
@@ -10,7 +11,6 @@ class AddressSerializer(serializers.ModelSerializer):
 
 
 class CustomerSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Customer
         fields = '__all__'
@@ -38,6 +38,26 @@ class CustomerSerializer(serializers.ModelSerializer):
             })
 
         return data
+    
+    def create(self, validated_data):
+        try:
+            return super().create(validated_data)
+        except IntegrityError:
+            raise serializers.ValidationError({
+                'firstName': "A customer with this name already exists.",
+                'lastName': "A customer with this name already exists.",
+                'middleName': "A customer with this name already exists."
+            })
+        
+    def update(self, instance, validated_data):
+        try:
+            return super().update(instance, validated_data)
+        except IntegrityError:
+            raise serializers.ValidationError({
+                'firstName': "A customer with this name already exists.",
+                'lastName': "A customer with this name already exists.",
+                'middleName': "A customer with this name already exists."
+            })
 
 
 class PhoneNumberSerializer(serializers.ModelSerializer):
