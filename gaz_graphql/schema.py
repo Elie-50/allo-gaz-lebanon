@@ -1,6 +1,10 @@
 import graphene
 import datetime
-from django.db.models import Q, F, Sum
+from datetime import timedelta
+from datetime import datetime as dt_datetime, timedelta, time as dt_time, timezone as dt_timezone
+from django.utils import timezone
+from django.db.models.functions import Cast
+from django.db.models import Q, F, Sum, CharField
 from django.core.paginator import Paginator, EmptyPage
 from django.utils.timezone import make_aware
 from graphene_django import DjangoObjectType
@@ -50,6 +54,15 @@ class AddressType(DjangoObjectType):
     def resolve_mobile_numbers(self, info):
         return self.mobile_numbers.all()
 
+class OrderType(DjangoObjectType):
+    class Meta:
+        model = Order
+        fields = "__all__"
+
+class OrderPaginationType(graphene.ObjectType):
+    orders = graphene.List(OrderType)
+    total_pages = graphene.Int()
+
 
 class CustomerType(DjangoObjectType):
     class Meta:
@@ -65,6 +78,38 @@ class CustomerType(DjangoObjectType):
 
     def resolve_orders(self, info):
         return self.orders.all()
+    
+    orders_paginated = graphene.Field(
+        OrderPaginationType,
+        start_date=graphene.Date(required=False),
+        end_date=graphene.Date(required=False),
+        page=graphene.Int(required=False, default_value=1),
+        page_size=graphene.Int(required=False, default_value=10),
+    )
+
+    def resolve_orders_paginated(self, info, start_date=None, end_date=None, page=1, page_size=10):
+        qs = self.orders.filter(isActive=True, deliveredAt__isnull=False)
+
+        if start_date:
+            # Convert start_date to UTC-aware datetime
+            local_start = timezone.make_aware(datetime.datetime.combine(start_date, datetime.time.min))
+            if end_date:
+                local_end = timezone.make_aware(datetime.datetime.combine(end_date, datetime.time.max))
+            else:
+                local_end = local_start + timedelta(days=1)  # single-day window
+
+            utc_start = local_start.astimezone(datetime.timezone.utc)
+            utc_end = local_end.astimezone(datetime.timezone.utc)
+
+            qs = qs.filter(orderedAt__range=(utc_start, utc_end))
+
+        paginator = Paginator(qs, page_size)
+        try:
+            page_obj = paginator.page(page)
+        except EmptyPage:
+            return OrderPaginationType(orders=[], total_pages=paginator.num_pages)
+
+        return OrderPaginationType(orders=page_obj.object_list, total_pages=paginator.num_pages)
 
 class CustomerSearchResult(graphene.ObjectType):
     customers = graphene.List(CustomerType)
@@ -79,11 +124,6 @@ class PhoneNumberType(DjangoObjectType):
         model = PhoneNumber
         fields = '__all__'
 
-
-class OrderType(DjangoObjectType):
-    class Meta:
-        model = Order
-        fields = "__all__"
 
 class SourceType(DjangoObjectType):
     class Meta:
@@ -143,6 +183,7 @@ class Query(graphene.ObjectType):
     )
     customers_search = graphene.Field(
         CustomerSearchResult,
+        id=graphene.String(required=True),
         firstname=graphene.String(required=True),
         lastname=graphene.String(required=True),
         middlename=graphene.String(required=True),
@@ -192,14 +233,22 @@ class Query(graphene.ObjectType):
 
     @login_required_resolver
     def resolve_total_profit(self, info, start_date, end_date=None, address_id=None):
-        start_of_day = make_aware(datetime.datetime.combine(start_date, datetime.time.min))
-        end_of_day = make_aware(datetime.datetime.combine(end_date or start_date, datetime.time.max))
+        # Convert start_date and end_date to aware UTC datetime range
+        local_start = timezone.make_aware(dt_datetime.combine(start_date, dt_time.min))
+        if end_date:
+            local_end = timezone.make_aware(dt_datetime.combine(end_date, dt_time.max))
+        else:
+            local_end = local_start + timedelta(days=1)
+
+        # Convert to UTC timezone
+        utc_start = local_start.astimezone(dt_timezone.utc)
+        utc_end = local_end.astimezone(dt_timezone.utc)
 
         if address_id:
             try:
                 address = Address.objects.get(id=address_id)
                 orders = address.orders.filter(
-                    orderedAt__range=(start_of_day, end_of_day),
+                    orderedAt__range=(utc_start, utc_end),
                     isActive=True,
                     deliveredAt__isnull=False
                 )
@@ -207,7 +256,7 @@ class Query(graphene.ObjectType):
                 return 0.0
         else:
             orders = Order.objects.filter(
-                orderedAt__range=(start_of_day, end_of_day),
+                orderedAt__range=(utc_start, utc_end),
                 isActive=True,
                 deliveredAt__isnull=False
             )
@@ -220,23 +269,32 @@ class Query(graphene.ObjectType):
 
     @login_required_resolver
     def resolve_paginated_orders(self, info, start_date, end_date=None, address_id=None, page=1, page_size=10):
-        start_of_day = make_aware(datetime.datetime.combine(start_date, datetime.time.min))
-        end_of_day = make_aware(datetime.datetime.combine(end_date or start_date, datetime.time.max))
+        # Local (server) time to aware datetime
+        local_start = timezone.make_aware(dt_datetime.combine(start_date, dt_time.min))
+        if end_date:
+            local_end = timezone.make_aware(dt_datetime.combine(end_date, dt_time.max))
+        else:
+            local_end = local_start + timedelta(days=1)
+
+        # Convert to UTC timezone
+        utc_start = local_start.astimezone(dt_timezone.utc)
+        utc_end = local_end.astimezone(dt_timezone.utc)
 
         address = None
         orders = []
+
         if address_id:
             try:
                 address = Address.objects.get(id=address_id)
                 orders = address.orders.filter(
-                    orderedAt__range=(start_of_day, end_of_day),
+                    orderedAt__range=(utc_start, utc_end),
                     isActive=True,
                 )
             except Address.DoesNotExist:
                 return OrderPaginationResult(orders=[], address=address, total_pages=0)
         else:
             orders = Order.objects.filter(
-                orderedAt__range=(start_of_day, end_of_day),
+                orderedAt__range=(utc_start, utc_end),
                 isActive=True,
                 deliveredAt__isnull=False
             )
@@ -249,7 +307,7 @@ class Query(graphene.ObjectType):
         try:
             paginated_orders = paginator.page(page)
         except EmptyPage:
-            return OrderPaginationResult(orders=[], address=address, totalPages=paginator.num_pages)
+            return OrderPaginationResult(orders=[], address=address, total_pages=paginator.num_pages)
 
         return OrderPaginationResult(
             orders=paginated_orders.object_list,
@@ -257,7 +315,7 @@ class Query(graphene.ObjectType):
             total_pages=paginator.num_pages,
         )
 
-    # @login_required_resolver
+    @login_required_resolver
     def resolve_all_items(self, info, page, number_of_results, low):
         if low:
             queryset = Item.objects.filter(stockQuantity__lte=F('limit'))
@@ -361,7 +419,7 @@ class Query(graphene.ObjectType):
         )
 
     @login_required_resolver
-    def resolve_customers_search(self, info, firstname, email, mobile, lastname, middlename, page, number_of_results, order_by, order_direction, is_active):
+    def resolve_customers_search(self, info, id, firstname, email, mobile, lastname, middlename, page, number_of_results, order_by, order_direction, is_active):
         # Initial name-based filter
         queryset = Customer.objects.filter(
             firstName__icontains=firstname,
@@ -385,11 +443,16 @@ class Query(graphene.ObjectType):
                 addresses__email__icontains=email
             )
 
+        if id:
+            queryset = queryset.annotate(id_str=Cast('id', CharField())).filter(id_str__icontains=str(id))
+
         # Handle ordering logic
         if order_by == "name":
             queryset = queryset.order_by("firstName", "lastName", "middleName")
         elif order_by == "createdAt":
             queryset = queryset.order_by("createdAt")  # Adjust field name if necessary
+        elif order_by == "id":
+            queryset = queryset.order_by("id")
 
         # If order_direction is -1, reverse the order
         if order_direction == -1:
