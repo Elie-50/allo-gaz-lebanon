@@ -18,13 +18,11 @@ class CustomerSerializer(serializers.ModelSerializer):
     def validate(self, data):
         firstName = data.get('firstName')
         lastName = data.get('lastName')
-        middleName = data.get('middleName')
 
         # Check for duplicates, excluding the current instance (on update)
         queryset = Customer.objects.filter(
             firstName=firstName,
-            lastName=lastName,
-            middleName=middleName
+            lastName=lastName
         )
         
         if self.instance:
@@ -33,8 +31,7 @@ class CustomerSerializer(serializers.ModelSerializer):
         if queryset.exists():
             raise serializers.ValidationError({
                 'firstName': "A customer with this name already exists.",
-                'lastName': "A customer with this name already exists.",
-                'middleName': "A customer with this name already exists."
+                'lastName': "A customer with this name already exists."
             })
 
         return data
@@ -45,8 +42,7 @@ class CustomerSerializer(serializers.ModelSerializer):
         except IntegrityError:
             raise serializers.ValidationError({
                 'firstName': "A customer with this name already exists.",
-                'lastName': "A customer with this name already exists.",
-                'middleName': "A customer with this name already exists."
+                'lastName': "A customer with this name already exists."
             })
         
     def update(self, instance, validated_data):
@@ -55,8 +51,7 @@ class CustomerSerializer(serializers.ModelSerializer):
         except IntegrityError:
             raise serializers.ValidationError({
                 'firstName': "A customer with this name already exists.",
-                'lastName': "A customer with this name already exists.",
-                'middleName': "A customer with this name already exists."
+                'lastName': "A customer with this name already exists."
             })
 
 

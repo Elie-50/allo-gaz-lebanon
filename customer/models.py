@@ -9,7 +9,7 @@ phone_regex = RegexValidator(
 # Create your models here.
 class Customer(models.Model):
     firstName = models.CharField(max_length=50, db_index=True)
-    middleName = models.CharField(max_length=50, db_index=True)
+    middleName = models.CharField(max_length=50, db_index=True, null=True, blank=True, default='')
     lastName = models.CharField(max_length=50, db_index=True)
     nickName = models.CharField(max_length=50, null=False, blank=True, default='')
     discount = models.FloatField(default=0)
