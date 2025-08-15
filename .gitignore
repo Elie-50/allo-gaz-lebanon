@@ -3,3 +3,4 @@ db.sqlite3
 /*.json
 /media/*
 backups/*.sql
+__pycache__/
