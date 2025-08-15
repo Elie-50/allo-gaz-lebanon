@@ -88,18 +88,25 @@ class CustomerType(DjangoObjectType):
     )
 
     def resolve_orders_paginated(self, info, start_date=None, end_date=None, page=1, page_size=10):
-        qs = self.orders.filter(isActive=True, deliveredAt__isnull=False)
+        qs = self.orders.filter(isActive=True)
 
         if start_date:
-            # Convert start_date to UTC-aware datetime
-            local_start = timezone.make_aware(datetime.datetime.combine(start_date, datetime.time.min))
-            if end_date:
-                local_end = timezone.make_aware(datetime.datetime.combine(end_date, datetime.time.max))
-            else:
-                local_end = local_start + timedelta(days=1)  # single-day window
+            local_tz = timezone.get_current_timezone()
 
-            utc_start = local_start.astimezone(datetime.timezone.utc)
-            utc_end = local_end.astimezone(datetime.timezone.utc)
+            # start datetime at 00:00 local time
+            local_start = dt_datetime.combine(start_date, dt_time.min)
+            local_start = timezone.make_aware(local_start, local_tz)
+
+            # end datetime at 23:59:59.999999 local time
+            if end_date:
+                local_end = dt_datetime.combine(end_date, dt_time.max)
+            else:
+                local_end = dt_datetime.combine(start_date, dt_time.max)
+            local_end = timezone.make_aware(local_end, local_tz)
+
+            # convert to UTC for DB query
+            utc_start = local_start.astimezone(dt_timezone.utc)
+            utc_end = local_end.astimezone(dt_timezone.utc)
 
             qs = qs.filter(orderedAt__range=(utc_start, utc_end))
 
@@ -267,54 +274,84 @@ class Query(graphene.ObjectType):
 
         return round(total_profit, 2)
 
-    @login_required_resolver
-    def resolve_paginated_orders(self, info, start_date, end_date=None, address_id=None, page=1, page_size=10):
-        # Local (server) time to aware datetime
-        local_start = timezone.make_aware(dt_datetime.combine(start_date, dt_time.min))
-        if end_date:
-            local_end = timezone.make_aware(dt_datetime.combine(end_date, dt_time.max))
-        else:
-            local_end = local_start + timedelta(days=1)
+    # @login_required_resolver
+    def resolve_paginated_orders(
+        self,
+        info,
+        start_date,
+        end_date=None,
+        address_id=None,
+        page=1,
+        page_size=10
+    ):
+        # Get Django's local timezone
+        local_tz = timezone.get_current_timezone()
 
-        # Convert to UTC timezone
+        # Create aware datetimes in local timezone for start and end
+        local_start = dt_datetime.combine(start_date, dt_time.min)  # 12:00 AM
+        local_start = timezone.make_aware(local_start, local_tz)
+
+        if end_date:
+            local_end = dt_datetime.combine(end_date, dt_time.max)  # 11:59:59.999999 PM
+            local_end = timezone.make_aware(local_end, local_tz)
+        else:
+            local_end = local_start + timedelta(days=1) - timedelta(microseconds=1)
+
+        # Convert to UTC for querying the database
         utc_start = local_start.astimezone(dt_timezone.utc)
         utc_end = local_end.astimezone(dt_timezone.utc)
 
-        address = None
-        orders = []
+        print(
+            f"Filtering from {utc_start.isoformat()} to {utc_end.isoformat()} => "
+            f"{Order.objects.filter(orderedAt__range=(utc_start, utc_end)).count()} orders"
+        )
 
+        address = None
+
+        # Base queryset
         if address_id:
             try:
                 address = Address.objects.get(id=address_id)
                 orders = address.orders.filter(
                     orderedAt__range=(utc_start, utc_end),
-                    isActive=True,
+                    isActive=True
                 )
             except Address.DoesNotExist:
-                return OrderPaginationResult(orders=[], address=address, total_pages=0)
+                return OrderPaginationResult(
+                    orders=[],
+                    address=None,
+                    total_pages=0
+                )
         else:
             orders = Order.objects.filter(
                 orderedAt__range=(utc_start, utc_end),
-                isActive=True,
-                deliveredAt__isnull=False
+                isActive=True
             )
 
-        # Prefetch related data
-        orders = orders.prefetch_related('item')
+        # Optimize related object loading
+        orders = orders.select_related('item')
 
-        # Apply pagination
+        # Ensure consistent ordering before pagination
+        orders = orders.order_by('-orderedAt')
+
+        # Paginate
         paginator = Paginator(orders, page_size)
         try:
             paginated_orders = paginator.page(page)
         except EmptyPage:
-            return OrderPaginationResult(orders=[], address=address, total_pages=paginator.num_pages)
+            return OrderPaginationResult(
+                orders=[],
+                address=address,
+                total_pages=paginator.num_pages
+            )
+        
+        print(f"ORDERS COUNT {orders.count()}")
 
         return OrderPaginationResult(
             orders=paginated_orders.object_list,
             address=address,
-            total_pages=paginator.num_pages,
+            total_pages=paginator.num_pages
         )
-
     @login_required_resolver
     def resolve_all_items(self, info, page, number_of_results, low):
         if low:
@@ -337,7 +374,7 @@ class Query(graphene.ObjectType):
             totalPages=paginator.num_pages
         )
     
-    @login_required_resolver
+    # @login_required_resolver
     def resolve_customer_by_id(self, info, id):
         try:
             return Customer.objects.get(id=id)

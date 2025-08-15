@@ -3,6 +3,7 @@ from item.models import Item
 from item.serializers import ItemSerializer
 from .models import Order, ExchangeRate
 from user.models import User
+from django.utils import timezone
 
 class OrderSerializer(serializers.ModelSerializer):
     user = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
@@ -27,7 +28,12 @@ class OrderSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         item = attrs['item']
         quantity = attrs['quantity']
-        
+        if 'orderedAt' in attrs:
+            attrs['orderedAt'] = timezone.make_aware(
+                attrs['orderedAt'],
+                timezone.get_current_timezone()
+            )
+
         if item.stockQuantity < quantity:
             raise serializers.ValidationError(
                 {'quantity': f"Only {item.stockQuantity} units available in stock."}
@@ -68,6 +74,12 @@ class OrderSerializer(serializers.ModelSerializer):
         if item.stockQuantity < quantity_difference:
             raise serializers.ValidationError(
                 {'quantity': f"Only {item.stockQuantity} units available in stock."}
+            )
+        
+        if 'orderedAt' in validated_data:
+            validated_data['orderedAt'] = timezone.make_aware(
+                validated_data['orderedAt'],
+                timezone.get_current_timezone()
             )
 
         item.stockQuantity -= quantity_difference
