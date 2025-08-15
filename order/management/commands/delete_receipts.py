@@ -2,8 +2,10 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from google.cloud import storage
 from order.models import Receipt
+from helpers.util import add_to_system_path
 
 class Command(BaseCommand):
+    add_to_system_path(r"C:\Program Files\MySQL\MySQL Server 8.0\bin")
     help = "Deletes files from GCS and associated Receipt instances"
 
     def add_arguments(self, parser):

@@ -3,6 +3,31 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
 import io
 import base64
+import winreg
+
+def add_to_system_path(new_path):
+    # Open the SYSTEM PATH registry key
+    key = winreg.OpenKey(
+        winreg.HKEY_LOCAL_MACHINE,
+        r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+        0, winreg.KEY_READ | winreg.KEY_WRITE
+    )
+
+    # Read the existing PATH
+    value, _ = winreg.QueryValueEx(key, "Path")
+    paths = value.split(";")
+
+    if new_path not in paths:
+        paths.append(new_path)
+        new_value = ";".join(paths)
+        winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, new_value)
+        print(f"✅ Added to system PATH: {new_path}")
+    else:
+        print("⚠ Already in PATH")
+
+    winreg.CloseKey(key)
+
+
 
 
 def create_base64_image():
