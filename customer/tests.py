@@ -19,7 +19,7 @@ class CustomerTestCase(BaseTestCase):
         self.assertEqual(response.data['firstName'], 'Alice')
         self.assertEqual(Customer.objects.count(), 2)
 
-    def test_create_customer_invalid_data(self):
+    def test_create_customer_duplicate_name(self):
         url = reverse('customer-list')
         data = {
             "firstName": "John",
@@ -28,7 +28,7 @@ class CustomerTestCase(BaseTestCase):
         }
 
         response = self.client.post(url, data, format='json', **self.auth_header)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
     def test_not_logged_in(self):
         url = reverse('customer-list')
@@ -66,7 +66,7 @@ class CustomerTestCase(BaseTestCase):
             "middleName": "Steve"
         }
         response = self.client.put(url, data, format='json', **self.auth_header)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     
     def test_soft_delete_customer(self):

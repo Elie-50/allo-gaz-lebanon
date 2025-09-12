@@ -19,6 +19,10 @@ class BaseTestCase(APITestCase):
             username='staff', password='staff_password', is_staff=True, is_superuser=False
         )
 
+        self.driver = User.objects.create_user(
+            username='driver', password='driver_password', is_driver=True, is_superuser=False
+        )
+
         self.item = Item.objects.create(
             name='item 1', stockQuantity=10, price=5, type="type 1", buyPrice=2
         )
@@ -61,7 +65,8 @@ class BaseTestCase(APITestCase):
             item=self.item2,
             quantity=5,
             address=self.address,
-            liraRate=90000
+            liraRate=90000,
+            driver=self.driver
         )
 
         # Get JWT token

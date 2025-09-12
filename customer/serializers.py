@@ -14,45 +14,7 @@ class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = '__all__'
-
-    def validate(self, data):
-        firstName = data.get('firstName')
-        lastName = data.get('lastName')
-
-        # Check for duplicates, excluding the current instance (on update)
-        queryset = Customer.objects.filter(
-            firstName=firstName,
-            lastName=lastName
-        )
-        
-        if self.instance:
-            queryset = queryset.exclude(pk=self.instance.pk)
-
-        if queryset.exists():
-            raise serializers.ValidationError({
-                'firstName': "A customer with this name already exists.",
-                'lastName': "A customer with this name already exists."
-            })
-
-        return data
     
-    def create(self, validated_data):
-        try:
-            return super().create(validated_data)
-        except IntegrityError:
-            raise serializers.ValidationError({
-                'firstName': "A customer with this name already exists.",
-                'lastName': "A customer with this name already exists."
-            })
-        
-    def update(self, instance, validated_data):
-        try:
-            return super().update(instance, validated_data)
-        except IntegrityError:
-            raise serializers.ValidationError({
-                'firstName': "A customer with this name already exists.",
-                'lastName': "A customer with this name already exists."
-            })
 
 
 class PhoneNumberSerializer(serializers.ModelSerializer):

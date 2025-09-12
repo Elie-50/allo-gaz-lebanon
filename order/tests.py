@@ -15,6 +15,7 @@ class OrderTestCase(BaseTestCase):
             "quantity": 5,
             "address": self.address.id,
             "liraRate": 89000,
+            "driver": self.driver.id
         }
 
         response = self.client.post(url, data, format='json', **self.auth_header)
@@ -32,6 +33,7 @@ class OrderTestCase(BaseTestCase):
             "quantity": 15,
             "address": self.address.id,
             "liraRate": 89000,
+            "driver": self.driver.id
         }
 
         response = self.client.post(url, data, format='json', **self.auth_header)
@@ -45,6 +47,7 @@ class OrderTestCase(BaseTestCase):
             "quantity": 10,
             "address": self.address.id,
             "liraRate": 89000,
+            "driver": self.driver.id
         }
 
         response = self.client.put(url, data, format='json', **self.auth_header)
@@ -61,6 +64,7 @@ class OrderTestCase(BaseTestCase):
             "quantity": 5,
             "address": self.address.id,
             "liraRate": 89000,
+            "driver": self.driver.id
         }
 
         response = self.client.put(url, data, format='json', **self.auth_header)
@@ -139,6 +143,7 @@ class MarkOrdersDeliveredTests(BaseTestCase):
             customer=self.customer,
             user=self.admin_user,
             item=self.item,
+            driver=self.driver,
             quantity=3,
             address=self.address,
             status='P',
