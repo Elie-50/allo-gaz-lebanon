@@ -184,7 +184,7 @@ class GenerateReceiptAPIView(APIView):
             return
 
         # Estimate space needed: ~48 points per order (you can adjust)
-        order_height = 48
+        order_height = 70
         base_height = 100  # Header + footer space
         total_height = base_height + len(orders) * order_height
         thermal_width = 164  # 58mm in points
@@ -223,8 +223,39 @@ class GenerateReceiptAPIView(APIView):
             c.drawString(10, y_position, item_info)
             y_position -= 12
 
-            price_after_discount = order.item.price * order.quantity * (1 - order.discount / 100)
-            c.drawString(10, y_position, self.prepare_arabic(f"Price: ${order.item.price} x {order.quantity} = ${price_after_discount:.2f}"))
+            gross = order.item.price * order.quantity
+
+            if order.discount > 1000:
+                discount_value = order.discount / order.liraRate
+            else:
+                discount_value = (order.discount * 1000) / order.liraRate
+
+            price_after_discount = gross - discount_value
+            if price_after_discount < 0:
+                price_after_discount = 0  # safeguard
+
+            # Show gross
+            c.drawString(
+                10,
+                y_position,
+                self.prepare_arabic(f"Gross: ${order.item.price} x {order.quantity} = ${gross:.2f}")
+            )
+            y_position -= 12
+
+            # Show discount
+            c.drawString(
+                10,
+                y_position,
+                self.prepare_arabic(f"Discount: -${discount_value:.2f}")
+            )
+            y_position -= 12
+
+            # Show net
+            c.drawString(
+                10,
+                y_position,
+                self.prepare_arabic(f"Net: ${price_after_discount:.2f}")
+            )
             y_position -= 12
 
             total_amount += price_after_discount

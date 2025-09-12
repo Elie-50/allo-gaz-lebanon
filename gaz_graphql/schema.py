@@ -4,7 +4,7 @@ from datetime import timedelta
 from datetime import datetime as dt_datetime, timedelta, time as dt_time, timezone as dt_timezone
 from django.utils import timezone
 from django.db.models.functions import Cast
-from django.db.models import Q, F, Sum, CharField
+from django.db.models import Q, F, Sum, CharField, Case, When, FloatField, ExpressionWrapper
 from django.core.paginator import Paginator, EmptyPage
 from django.utils.timezone import make_aware
 from graphene_django import DjangoObjectType
@@ -268,9 +268,19 @@ class Query(graphene.ObjectType):
                 deliveredAt__isnull=False
             )
 
-        total_profit = orders.annotate(
-            profit=(F('item__price') - F('item__buyPrice')) * F('quantity') * (1 - F('discount') / 100)
-        ).aggregate(total_profit=Sum('profit'))['total_profit'] or 0.0
+        orders_with_profit = orders.annotate(
+            gross_profit=(F('item__price') - F('item__buyPrice')) * F('quantity'),
+            discount_value=Case(
+                When(discount__gt=1000,
+                    then=ExpressionWrapper(F('discount') / F('liraRate'), output_field=FloatField())),
+                default=ExpressionWrapper((F('discount') * 1000) / F('liraRate'), output_field=FloatField()),
+                output_field=FloatField(),
+            )
+        ).annotate(
+            profit=F('gross_profit') - F('discount_value')
+        )
+
+        total_profit = orders_with_profit.aggregate(total_profit=Sum('profit'))['total_profit'] or 0.0
 
         return round(total_profit, 2)
 
