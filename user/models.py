@@ -19,3 +19,4 @@ class User(AbstractUser):
     )
 
     is_driver = models.BooleanField(default=False, db_index=True)
+    region = models.CharField(max_length=100, null=False, blank=True, default='')

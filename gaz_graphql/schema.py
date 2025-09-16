@@ -18,7 +18,7 @@ from urllib.parse import urlparse, urlunparse
 class UserType(DjangoObjectType):
     class Meta:
         model = User
-        fields = ('id', 'username', 'first_name', 'middle_name', 'email', 'last_name', 'phone_number', 'is_driver', 'is_staff', 'is_active', 'is_superuser')
+        fields = ('id', 'username', 'first_name', 'middle_name', 'email', 'last_name', 'phone_number', 'is_driver', 'is_staff', 'is_active', 'is_superuser', 'region')
 
     orders = graphene.List(lambda: OrderType)
 
@@ -72,7 +72,7 @@ class CustomerType(DjangoObjectType):
     addresses = graphene.List(lambda: AddressType)
 
     def resolve_addresses(self, info):
-        return self.addresses.filter(isActive=True)
+        return self.addresses.all()
 
     orders = graphene.List(lambda: OrderType)
 
@@ -231,12 +231,18 @@ class Query(graphene.ObjectType):
     )
 
     drivers_search = graphene.List(
-        UserType
+        UserType,
+        region=graphene.String(required=False)
     )
 
     @login_required_resolver
-    def resolve_drivers_search(self, info):
-        return User.objects.filter(is_driver=True)
+    def resolve_drivers_search(self, info, region=None):
+        queryset = User.objects.filter(is_driver=True)
+
+        if region is not None:
+            queryset = queryset.filter(region__icontains=region)
+
+        return queryset
 
     @login_required_resolver
     def resolve_total_profit(self, info, start_date, end_date=None, address_id=None):
@@ -284,7 +290,7 @@ class Query(graphene.ObjectType):
 
         return round(total_profit, 2)
 
-    # @login_required_resolver
+    @login_required_resolver
     def resolve_paginated_orders(
         self,
         info,
@@ -384,7 +390,7 @@ class Query(graphene.ObjectType):
             totalPages=paginator.num_pages
         )
     
-    # @login_required_resolver
+    @login_required_resolver
     def resolve_customer_by_id(self, info, id):
         try:
             return Customer.objects.get(id=id)

@@ -2,7 +2,6 @@ from rest_framework import serializers
 from .models import User
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         identifier = attrs.get("username")
@@ -38,7 +37,21 @@ class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(required=False, write_only=True)
     class Meta:
         model = User
-        fields = ['id', 'username', 'password', 'first_name', 'middle_name', 'last_name', 'email', 'is_staff', 'is_driver', 'is_active', 'is_superuser', 'phone_number']
+        fields = [
+            'id',
+            'username',
+            'password',
+            'first_name',
+            'middle_name',
+            'last_name',
+            'email',
+            'is_staff',
+            'is_driver',
+            'is_active',
+            'is_superuser',
+            'phone_number',
+            'region'
+        ]
 
     def validate(self, attrs):
         request = self.context.get('request')
