@@ -69,14 +69,15 @@ class CustomerTestCase(BaseTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     
-    def test_soft_delete_customer(self):
+    def test_hard_delete_customer(self):
         url = reverse('customer-detail', args=[self.customer.id])
+        id = self.customer.id
         response = self.client.delete(url, **self.auth_header)
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
-        # Refresh from DB and confirm soft delete
-        self.customer.refresh_from_db()
-        self.assertFalse(self.customer.isActive)
+        # Confirm hard delete
+        still_exists = Customer.objects.filter(id=id).exists()
+        self.assertFalse(still_exists)
 
 class AddressTestCase(BaseTestCase):
     def test_add_address_to_customer(self):
